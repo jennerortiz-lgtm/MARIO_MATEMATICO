@@ -1,0 +1,559 @@
+
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mario Matemático Bros - UTMACH Edition</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
+        body {
+            margin: 0;
+            background-color: #111;
+            color: white;
+            font-family: 'Press+Start+2P', cursive;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+        }
+
+        canvas {
+            border: 4px solid #fff;
+            background: #5c94fc; 
+            box-shadow: 0 0 30px rgba(0,0,0,0.7);
+            image-rendering: pixelated;
+        }
+
+        #ui-overlay {
+            position: absolute;
+            top: 20px;
+            width: 800px;
+            display: flex;
+            justify-content: space-between;
+            pointer-events: none;
+            text-shadow: 2px 2px #000;
+            z-index: 10;
+        }
+
+        #quiz-modal {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(20, 20, 20, 0.98);
+            padding: 30px;
+            border: 6px double #f1c40f;
+            width: 90%;
+            max-width: 650px;
+            z-index: 100;
+            text-align: center;
+            box-shadow: 0 0 50px rgba(0,0,0,1);
+        }
+
+        .option-btn {
+            display: block;
+            width: 100%;
+            padding: 15px;
+            margin: 10px 0;
+            background: #2c3e50;
+            border: 3px solid #7f8c8d;
+            color: white;
+            cursor: pointer;
+            font-family: 'Press+Start+2P', cursive;
+            font-size: 11px;
+            transition: all 0.2s;
+        }
+
+        .option-btn:hover {
+            background: #e67e22;
+            border-color: #fff;
+            transform: scale(1.02);
+        }
+
+        .math-text {
+            font-family: 'Courier New', Courier, monospace;
+            font-weight: bold;
+            color: #f1c40f;
+            background: #000;
+            padding: 2px 5px;
+            border-radius: 4px;
+        }
+
+        #feedback-msg {
+            position: fixed;
+            top: 25%;
+            width: 80%;
+            text-align: center;
+            font-size: 18px;
+            display: none;
+            z-index: 200;
+            text-shadow: 4px 4px #000;
+            line-height: 1.5;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="ui-overlay">
+        <div>MATEMÁTICO<br><span id="score">000000</span></div>
+        <div>NIVEL<br><span id="level-display">1-1</span></div>
+        <div>VIDAS<br><span id="lives-display">❤❤❤</span></div>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <div id="quiz-modal">
+        <h2 id="quiz-title" style="color: #f1c40f; margin-bottom: 25px; font-size: 14px;">EXAMEN DE ADMISIÓN</h2>
+        <p id="question-text" style="margin-bottom: 30px; line-height: 1.8; font-size: 14px; color: #ecf0f1;"></p>
+        <div id="options-container"></div>
+    </div>
+
+    <div id="feedback-msg"></div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreEl = document.getElementById('score');
+        const levelEl = document.getElementById('level-display');
+        const livesEl = document.getElementById('lives-display');
+        const quizModal = document.getElementById('quiz-modal');
+        const feedbackMsg = document.getElementById('feedback-msg');
+        const questionText = document.getElementById('question-text');
+        const optionsContainer = document.getElementById('options-container');
+
+        canvas.width = 800;
+        canvas.height = 400;
+
+        const motivationalMessages = [
+            "¡Vas por buen camino hacia tu cupo universitario!",
+            "¡Excelente! La UTMACH te espera con los brazos abiertos.",
+            "¡Cada nivel superado es un paso más cerca de tu carrera!",
+            "¡Tu esfuerzo hoy es tu éxito de mañana en la universidad!",
+            "¡Sigue así, futuro profesional de la UTMACH!",
+            "¡Nada detiene a alguien decidido a ingresar a la U!",
+            "¡Eres capaz de dominar cualquier examen de admisión!"
+        ];
+
+        const questions = [
+            // N1: Razonamiento Numérico (1-5)
+            { q: "Si 5 obreros hacen una obra en 10 días, ¿cuántos días tardarán 2 obreros?", a: ["4 días", "15 días", "25 días", "20 días"], correct: 2 },
+            { q: "Encuentra el valor de X: 3x - 5 = 16", a: ["X = 7", "X = 6", "X = 21", "X = 5"], correct: 0 },
+            { q: "El 15% de 200 es igual a:", a: ["20", "30", "45", "35"], correct: 1 },
+            { q: "¿Cuál es el sucesor del número primo 17?", a: ["18", "19", "21", "23"], correct: 0 },
+            { q: "Resuelve la serie: 1, 4, 9, 16, ...", a: ["20", "24", "25", "36"], correct: 2 },
+            
+            // N2: Exponentes y Radicales (6-10)
+            { q: "Simplifica: (2³)²", a: ["2⁵", "2⁶", "2⁹", "64"], correct: 1 },
+            { q: "Calcula el valor de: √144 + √25", a: ["13", "17", "19", "169"], correct: 1 },
+            { q: "Valor de: (1/2)⁻²", a: ["-4", "1/4", "4", "2"], correct: 2 },
+            { q: "Simplifica: ⁵√x¹⁰", a: ["x²", "x⁵", "x⁵⁰", "x"], correct: 0 },
+            { q: "Resuelve: 3⁰ + 3¹ + 3²", a: ["12", "13", "9", "4"], correct: 1 },
+
+            // N3: Razonamiento Lógico (11-15)
+            { q: "Si Juan es más alto que Pedro y Pedro es más alto que Luis, ¿quién es el más bajo?", a: ["Juan", "Pedro", "Luis", "Son iguales"], correct: 2 },
+            { q: "En una familia de 3 hermanos, cada uno tiene una hermana. ¿Cuántos hermanos son en total?", a: ["3", "4", "6", "5"], correct: 1 },
+            { q: "Día que está antes del ayer de mañana es...", a: ["Hoy", "Mañana", "Ayer", "Antier"], correct: 2 },
+            { q: "Completa: Tierra es a Planeta como Luna es a...", a: ["Estrella", "Sol", "Satélite", "Cometa"], correct: 2 },
+            { q: "¿Cuántos meses tienen 28 días?", a: ["Solo 1", "Todos", "Ninguno", "6 meses"], correct: 1 },
+
+            // N4: Logaritmos y Exponenciales (16-20)
+            { q: "Resuelve: log₂ (16)", a: ["4", "8", "2", "1"], correct: 0 },
+            { q: "Si 3ˣ = 81, ¿cuánto vale x?", a: ["3", "4", "5", "9"], correct: 1 },
+            { q: "Valor de: log₁₀ (0.1)", a: ["1", "0", "-1", "10"], correct: 2 },
+            { q: "Propiedad: log(A) - log(B) es igual a:", a: ["log(A+B)", "log(A*B)", "log(A/B)", "A-B"], correct: 2 },
+            { q: "Encuentra x: eˡⁿ⁽⁵⁾ = x", a: ["e", "5", "1", "ln 5"], correct: 1 },
+
+            // N5: Geometría Básica (21-25)
+            { q: "Área de un círculo de radio r=2 (usa π):", a: ["2π", "4π", "8π", "π"], correct: 1 },
+            { q: "Suma de ángulos internos de un cuadrilátero:", a: ["180°", "270°", "360°", "540°"], correct: 2 },
+            { q: "¿Cómo se llama el triángulo con todos sus lados iguales?", a: ["Isósceles", "Escaleno", "Rectángulo", "Equilátero"], correct: 3 },
+            { q: "Teorema de Pitágoras: c² =", a: ["a + b", "a² - b²", "a² + b²", "2ab"], correct: 2 },
+            { q: "Perímetro de un hexágono regular de lado 5cm:", a: ["25cm", "30cm", "35cm", "20cm"], correct: 1 },
+
+            // N6: Polígonos Regulares (26-30)
+            { q: "¿Cuántas diagonales tiene un pentágono?", a: ["2", "5", "10", "3"], correct: 1 },
+            { q: "Fórmula del ángulo central de un polígono de n lados:", a: ["180/n", "360/n", "n-2", "360"], correct: 1 },
+            { q: "Área de un polígono regular:", a: ["(Lado * n) / 2", "(Perímetro * Apotema) / 2", "Base * Altura", "L²"], correct: 1 },
+            { q: "Un polígono de 12 lados se llama:", a: ["Decágono", "Endecágono", "Dodecágono", "Icoságono"], correct: 2 },
+            { q: "Ángulo interno de un cuadrado:", a: ["45°", "90°", "180°", "60°"], correct: 1 },
+
+            // N7: Trigonometría (31-35)
+            { q: "sen(θ) es igual a:", a: ["Cateto Ady / Hip", "Cateto Op / Ady", "Cateto Op / Hip", "1 / cos(θ)"], correct: 2 },
+            { q: "Valor de tan(45°):", a: ["0", "1", "√2", "0.5"], correct: 1 },
+            { q: "Identidad fundamental: sen²x + cos²x =", a: ["0", "2", "1", "tan x"], correct: 2 },
+            { q: "¿En qué cuadrante el seno y coseno son negativos?", a: ["I", "II", "III", "IV"], correct: 2 },
+            { q: "sen(90°) es:", a: ["0", "0.5", "1", "-1"], correct: 2 },
+
+            // N8: Razonamiento Abstracto (36-40)
+            { q: "¿Qué figura sigue? Círculo, Cuadrado, Círculo, ...", a: ["Triángulo", "Círculo", "Cuadrado", "Punto"], correct: 2 },
+            { q: "Si giras 90° a la derecha una flecha que apunta al Norte:", a: ["Sur", "Este", "Oeste", "Noreste"], correct: 1 },
+            { q: "Cara opuesta al 1 en un dado estándar:", a: ["2", "5", "6", "4"], correct: 2 },
+            { q: "Número de cubos en una torre de 3x3x3:", a: ["9", "18", "27", "81"], correct: 2 },
+            { q: "¿Cuál es diferente? Cubo, Esfera, Cuadrado, Cono.", a: ["Cubo", "Esfera", "Cuadrado", "Cono"], correct: 2 },
+
+            // N9: Álgebra Superior (41-45)
+            { q: "Factoriza x² - 9:", a: ["(x-3)²", "(x+3)(x-3)", "(x+9)(x-9)", "x(x-9)"], correct: 1 },
+            { q: "Discriminante (D) de la ec. cuadrática:", a: ["b - 4ac", "b² + 4ac", "b² - 4ac", "2a"], correct: 2 },
+            { q: "Pendiente de la recta y = 3x - 2:", a: ["-2", "3", "3/2", "0"], correct: 1 },
+            { q: "Resuelve: 2(x - 3) = 10", a: ["X=8", "X=5", "X=13", "X=2"], correct: 0 },
+            { q: "Si x + y = 10 y x - y = 2, entonces x es:", a: ["4", "5", "6", "8"], correct: 2 },
+
+            // N10: Examen Final UTMACH (46-50)
+            { q: "La suma de dos números es 20 y su diferencia es 10. ¿Cuál es el producto?", a: ["50", "75", "100", "200"], correct: 1 },
+            { q: "Calcula el volumen de un cubo de lado 3:", a: ["9", "12", "27", "18"], correct: 2 },
+            { q: "Simplifica: (x³ * x⁴) / x²", a: ["x⁵", "x⁹", "x⁶", "x⁷"], correct: 0 },
+            { q: "¿Cuál es la probabilidad de sacar un AS en una baraja de 52?", a: ["1/52", "4/52", "1/4", "1/13"], correct: 3 },
+            { q: "ÚLTIMA PRUEBA: Si log x + log 2 = log 10, x es:", a: ["8", "5", "12", "2"], correct: 1 }
+        ];
+
+        const gameState = {
+            currentLevel: 1,
+            questionsInLevel: 0,
+            score: 0,
+            lives: 3,
+            isQuizActive: false,
+            cameraX: 0,
+            gravity: 0.5,
+            isGameOver: false,
+            levelCleared: false,
+            transitioning: false
+        };
+
+        class Player {
+            constructor() {
+                this.width = 32;
+                this.height = 48;
+                this.x = 50;
+                this.y = 300;
+                this.vx = 0;
+                this.vy = 0;
+                this.speed = 5.5;
+                this.jumpPower = -12.5;
+                this.grounded = false;
+            }
+
+            draw() {
+                ctx.fillStyle = "#e74c3c";
+                ctx.fillRect(this.x - gameState.cameraX, this.y, this.width, this.height);
+                ctx.fillStyle = "#ff0000";
+                ctx.fillRect(this.x - gameState.cameraX - 2, this.y, this.width + 4, 8);
+                ctx.fillStyle = "#2980b9";
+                ctx.fillRect(this.x - gameState.cameraX, this.y + 20, this.width, 28);
+                ctx.fillStyle = "#000";
+                ctx.fillRect(this.x - gameState.cameraX + 22, this.y + 12, 4, 6);
+            }
+
+            update() {
+                if (gameState.transitioning || gameState.isQuizActive || gameState.isGameOver) return;
+
+                this.vy += gameState.gravity;
+                this.x += this.vx;
+                this.y += this.vy;
+
+                if (this.y + this.height > canvas.height - 40) {
+                    this.y = canvas.height - 40 - this.height;
+                    this.vy = 0;
+                    this.grounded = true;
+                } else {
+                    this.grounded = false;
+                }
+
+                if (this.x > canvas.width / 2) {
+                    gameState.cameraX = this.x - canvas.width / 2;
+                }
+                
+                if (gameState.cameraX > 3700 - canvas.width) {
+                    gameState.cameraX = 3700 - canvas.width;
+                }
+                
+                if (this.x < 0) this.x = 0;
+            }
+        }
+
+        class Block {
+            constructor(x, y, w, h, type = 'normal') {
+                this.x = x; this.y = y; this.w = w; this.h = h; this.type = type; 
+            }
+            draw() {
+                if(this.type === 'door') {
+                    ctx.fillStyle = '#f1c40f';
+                    ctx.fillRect(this.x - gameState.cameraX, this.y, this.w, this.h);
+                    ctx.strokeStyle = '#fff';
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(this.x - gameState.cameraX, this.y, this.w, this.h);
+                    ctx.fillStyle = '#000';
+                    ctx.font = "bold 20px Arial";
+                    ctx.fillText("?", this.x - gameState.cameraX + 12, this.y + 35);
+                } else if (this.type === 'flag') {
+                    ctx.fillStyle = '#ecf0f1';
+                    ctx.fillRect(this.x - gameState.cameraX, this.y, 10, this.h);
+                    ctx.fillStyle = '#27ae60';
+                    ctx.beginPath();
+                    ctx.moveTo(this.x - gameState.cameraX + 10, this.y);
+                    ctx.lineTo(this.x - gameState.cameraX + 70, this.y + 35);
+                    ctx.lineTo(this.x - gameState.cameraX + 10, this.y + 70);
+                    ctx.fill();
+                    ctx.fillStyle = '#34495e';
+                    ctx.fillRect(this.x - gameState.cameraX - 10, this.y + this.h, 30, 10);
+                } else {
+                    ctx.fillStyle = '#d35400';
+                    ctx.fillRect(this.x - gameState.cameraX, this.y, this.w, this.h);
+                    ctx.strokeStyle = '#a04000';
+                    ctx.strokeRect(this.x - gameState.cameraX, this.y, this.w, this.h);
+                }
+            }
+        }
+
+        class Enemy {
+            constructor(x, y) {
+                this.x = x; this.y = y; this.w = 34; this.h = 34;
+                this.vx = -2.5;
+            }
+            draw() {
+                ctx.fillStyle = "#4b2c20"; 
+                ctx.beginPath();
+                ctx.moveTo(this.x - gameState.cameraX, this.y + this.h);
+                ctx.lineTo(this.x - gameState.cameraX + this.w, this.y + this.h);
+                ctx.lineTo(this.x - gameState.cameraX + this.w/2, this.y);
+                ctx.fill();
+                ctx.fillStyle = "white";
+                ctx.fillRect(this.x - gameState.cameraX + 8, this.y + 10, 4, 4);
+                ctx.fillRect(this.x - gameState.cameraX + 22, this.y + 10, 4, 4);
+            }
+            update() {
+                if (gameState.isQuizActive) return;
+                this.x += this.vx;
+                if(this.x < 500) this.vx = 2.5;
+                if(this.x > 3500) this.vx = -2.5;
+            }
+        }
+
+        let player = new Player();
+        let platforms = [];
+        let enemies = [];
+        let doors = [];
+        let flag = null;
+
+        function updateLivesDisplay() {
+            livesEl.innerText = "❤".repeat(gameState.lives) + "🖤".repeat(3 - gameState.lives);
+        }
+
+        function initLevel() {
+            platforms = []; enemies = []; doors = [];
+            gameState.cameraX = 0;
+            gameState.questionsInLevel = 0;
+            gameState.levelCleared = false;
+            gameState.transitioning = false;
+            gameState.isGameOver = false;
+            player.x = 50; player.y = 300;
+            levelEl.innerText = `${gameState.currentLevel}-1`;
+            updateLivesDisplay();
+
+            platforms.push(new Block(0, canvas.height - 40, 5000, 40));
+
+            for (let i = 0; i < 5; i++) {
+                let xPos = 700 + (i * 550);
+                platforms.push(new Block(xPos - 50, 240, 100, 25));
+                doors.push(new Block(xPos, 180, 40, 60, 'door'));
+                enemies.push(new Enemy(xPos + 300, canvas.height - 74));
+            }
+
+            flag = new Block(3600, 80, 10, 280, 'flag');
+        }
+
+        function triggerQuiz(doorIndex) {
+            if (gameState.isQuizActive) return;
+            
+            gameState.isQuizActive = true;
+            const qIndex = ((gameState.currentLevel - 1) * 5) + gameState.questionsInLevel;
+            const currentQ = questions[qIndex];
+
+            let formattedQ = currentQ.q
+                .replace(/\^(\d+)/g, '<sup>$1</sup>')
+                .replace(/√(\w+)/g, '<span class="math-text">√$1</span>');
+
+            questionText.innerHTML = formattedQ;
+            optionsContainer.innerHTML = '';
+            
+            currentQ.a.forEach((opt, idx) => {
+                const btn = document.createElement('button');
+                btn.className = 'option-btn';
+                btn.innerText = opt;
+                btn.onclick = () => checkAnswer(idx, currentQ.correct, doorIndex);
+                optionsContainer.appendChild(btn);
+            });
+
+            quizModal.style.display = 'block';
+        }
+
+        function showFeedback(text, color, duration = 1500) {
+            feedbackMsg.innerHTML = text;
+            feedbackMsg.style.color = color;
+            feedbackMsg.style.display = 'block';
+            setTimeout(() => { feedbackMsg.style.display = 'none'; }, duration);
+        }
+
+        function checkAnswer(selected, correct, doorIndex) {
+            if (selected === correct) {
+                showFeedback("¡CORRECTO! +100<br><small>Buen razonamiento</small>", "#2ecc71");
+                gameState.score += 100;
+                gameState.questionsInLevel++;
+                scoreEl.innerText = gameState.score.toString().padStart(6, '0');
+                doors.splice(doorIndex, 1);
+                if (gameState.questionsInLevel === 5) gameState.levelCleared = true;
+            } else {
+                gameState.lives--;
+                updateLivesDisplay();
+                if (gameState.lives <= 0) {
+                    triggerFullGameOver();
+                } else {
+                    showFeedback("¡INCORRECTO!<br><small>Pierdes una vida</small>", "#e74c3c");
+                    player.x -= 150; 
+                }
+            }
+            gameState.isQuizActive = false;
+            quizModal.style.display = 'none';
+        }
+
+        function triggerFullGameOver() {
+            gameState.isGameOver = true;
+            showFeedback("PERDISTE TODAS LAS VIDAS<br><small>No te rindas, vuelve a intentarlo desde el Nivel 1</small>", "#fff", 3000);
+            setTimeout(() => {
+                gameState.currentLevel = 1;
+                gameState.lives = 3;
+                gameState.score = 0;
+                scoreEl.innerText = "000000";
+                initLevel();
+            }, 3000);
+        }
+
+        function animateLevelTransition() {
+            if (gameState.transitioning) return;
+            gameState.transitioning = true;
+            
+            const msg = motivationalMessages[Math.floor(Math.random() * motivationalMessages.length)];
+            showFeedback(`¡NIVEL COMPLETADO!<br><span style="font-size:14px; color:#f1c40f;">${msg}</span>`, "#fff", 2500);
+            
+            setTimeout(() => {
+                gameState.currentLevel++;
+                if (gameState.currentLevel > 10) {
+                    showFeedback("¡FELICITACIONES!<br>HAS COMPLETADO TU PREPARACIÓN.<br>¡EL CUPO ES TUYO!", "#f1c40f", 5000);
+                    setTimeout(() => location.reload(), 5000);
+                } else {
+                    initLevel();
+                }
+            }, 2500);
+        }
+
+        function update() {
+            if (gameState.isQuizActive || gameState.isGameOver || gameState.transitioning) return;
+
+            player.update();
+
+            enemies.forEach(en => {
+                en.update();
+                if (player.x < en.x + en.w && player.x + player.width > en.x &&
+                    player.y < en.y + en.h && player.y + player.height > en.y) {
+                    if (player.vy > 0 && player.y < en.y) {
+                        enemies = enemies.filter(e => e !== en);
+                        player.vy = -10;
+                        gameState.score += 50;
+                        scoreEl.innerText = gameState.score.toString().padStart(6, '0');
+                    } else {
+                        gameState.lives--;
+                        updateLivesDisplay();
+                        if (gameState.lives <= 0) {
+                            triggerFullGameOver();
+                        } else {
+                            showFeedback("¡CUIDADO!<br><small>Menos una vida</small>", "#e74c3c");
+                            player.x -= 200;
+                            player.y = 200;
+                        }
+                    }
+                }
+            });
+
+            doors.forEach((door, index) => {
+                if (player.x < door.x + door.w && player.x + player.width > door.x &&
+                    player.y < door.y + door.h && player.y + player.height > door.y) {
+                    triggerQuiz(index);
+                }
+            });
+
+            if (gameState.levelCleared && flag) {
+                if (player.x < flag.x + 40 && player.x + player.width > flag.x &&
+                    player.y < flag.y + flag.h && player.y + player.height > flag.y) {
+                    animateLevelTransition();
+                }
+            }
+            
+            platforms.forEach(p => {
+                 if (player.x < p.x + p.w && player.x + player.width > p.x &&
+                    player.y + player.height > p.y && player.y < p.y + p.h) {
+                     if(player.vy > 0 && player.y < p.y + 10) {
+                         player.y = p.y - player.height;
+                         player.vy = 0;
+                         player.grounded = true;
+                     }
+                 }
+            });
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Fondo
+            ctx.fillStyle = "#4a7a1a";
+            for(let i=0; i<4; i++) {
+                ctx.beginPath();
+                ctx.moveTo((i*800) - gameState.cameraX*0.15, 400);
+                ctx.lineTo((i*800+400) - gameState.cameraX*0.15, 120);
+                ctx.lineTo((i*800+800) - gameState.cameraX*0.15, 400);
+                ctx.fill();
+            }
+
+            platforms.forEach(p => p.draw());
+            doors.forEach(d => d.draw());
+            if(flag) flag.draw();
+            enemies.forEach(e => e.draw());
+            player.draw();
+
+            // Mensajes HUD
+            ctx.fillStyle = "white";
+            ctx.font = "10px 'Press Start 2P'";
+            if(!gameState.levelCleared) {
+                ctx.fillText(`DESAFÍOS PENDIENTES: ${5 - gameState.questionsInLevel}`, 20, 385);
+            } else {
+                ctx.fillStyle = "#f1c40f";
+                ctx.fillText("¡EXCELENTE! CORRE HACIA LA BANDERA", 20, 385);
+                ctx.fillText("META ---->", 600, 385);
+            }
+        }
+
+        function gameLoop() {
+            update(); draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        window.addEventListener('keydown', e => {
+            if (e.key === 'ArrowRight' || e.key === 'd') player.vx = player.speed;
+            if (e.key === 'ArrowLeft' || e.key === 'a') player.vx = -player.speed;
+            if ((e.key === 'ArrowUp' || e.key === 'w' || e.key === ' ') && player.grounded) {
+                player.vy = player.jumpPower;
+            }
+        });
+
+        window.addEventListener('keyup', e => {
+            if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'ArrowLeft' || e.key === 'a') player.vx = 0;
+        });
+
+        initLevel();
+        gameLoop();
+    </script>
+</body>
+</html>
